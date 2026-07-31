@@ -9,7 +9,7 @@
     "dev": "node --env-file-if-exists=.env --watch server.js"
   },
   "engines": {
-    "node": ">=20.6"
+    "node": ">=20.12"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
