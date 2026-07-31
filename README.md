@@ -178,8 +178,10 @@ Thư mục tĩnh trỏ vào `public/` chứ không phải thư mục gốc — n
 | `PORT` | `8787` | Cổng chạy server |
 | `ALLOWED_ORIGINS` | *(trống)* | Domain được phép xin token. Để trống thì tự chấp nhận chính domain đang deploy và localhost |
 | `TOKEN_TTL_SECONDS` | `60` | Key tạm sống bao lâu (chỉ cần đủ để bấm Start) |
-| `MAX_SESSION_SECONDS` | `3600` | Trần thời lượng một phiên, chặn tab quên đóng tính tiền mãi |
-| `RATE_LIMIT_PER_MINUTE` | `20` | Số lần xin token mỗi phút cho mỗi IP |
+
+> Không còn trần thời lượng phiên và không giới hạn số request. Thứ duy nhất
+> đóng phiên là phía trình duyệt: im lặng 1 phút (`IDLE_MS` trong
+> `public/index.html`) thì tự dừng.
 
 ---
 

@@ -847,6 +847,22 @@
       let count = { a: 0, b: 0 };
       let endTimer = null; // debounce before committing a finished utterance
 
+      /* Idle guard — the only thing bounding a session now. Every recognised
+         token pushes the deadline back, so a real conversation never trips it;
+         a forgotten tab hangs up a minute after the last word. */
+      const IDLE_MS = 60_000;
+      let idleTimer = null;
+
+      function armIdle() {
+        clearTimeout(idleTimer);
+        if (!running) return;
+        idleTimer = setTimeout(() => {
+          if (!running) return;
+          stop();
+          setStatus("Stopped — no speech for 1 minute");
+        }, IDLE_MS);
+      }
+
       /* =========================================================================
    Broadcasting to a room
    The host key arrives in the URL fragment (#room=…&host=…). Fragments are
@@ -1169,6 +1185,7 @@
 
           if (tk.is_final) buf[t].fin += txt;
           else buf[t].live += txt;
+          armIdle(); // words are arriving — someone is still talking
         }
 
         renderLive();
@@ -1336,6 +1353,7 @@ registerProcessor('pcm', PCM);`;
             }),
           );
           setStatus("Listening", "on");
+          armIdle(); // the clock starts once we are actually listening
         };
 
         socket.onmessage = (ev) => {
@@ -1372,6 +1390,7 @@ registerProcessor('pcm', PCM);`;
       function stop(fromClose) {
         running = false;
         clearTimeout(endTimer);
+        clearTimeout(idleTimer);
         $("btnStart").disabled = false;
         $("btnStop").disabled = true;
 

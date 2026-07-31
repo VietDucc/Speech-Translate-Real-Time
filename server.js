@@ -30,45 +30,14 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "")
 
 // How long the browser has to OPEN a stream (not how long it may talk).
 const TOKEN_TTL_SECONDS = Number(process.env.TOKEN_TTL_SECONDS ?? 60);
-// Hard ceiling on a single stream, so a forgotten tab cannot bill forever.
-const MAX_SESSION_SECONDS = Number(process.env.MAX_SESSION_SECONDS ?? 3600);
-
-const RATE_LIMIT = Number(process.env.RATE_LIMIT_PER_MINUTE ?? 20);
 
 const SONIOX_TOKEN_URL = "https://api.soniox.com/v1/auth/temporary-api-key";
 
 const app = new Hono();
 
-/* ------------------------------------------------------------------ *
- * Rate limit — a fixed window per IP. In-memory on purpose: this is a
- * single-process helper, not a cluster. Move to Redis if you scale out.
- * ------------------------------------------------------------------ */
-const hits = new Map(); // ip -> { count, resetAt }
-
-function overLimit(ip) {
-  const now = Date.now();
-  const rec = hits.get(ip);
-  if (!rec || now > rec.resetAt) {
-    hits.set(ip, { count: 1, resetAt: now + 60_000 });
-    return false;
-  }
-  rec.count++;
-  return rec.count > RATE_LIMIT;
-}
-
-// Drop stale buckets so the Map cannot grow without bound.
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, rec] of hits) if (now > rec.resetAt) hits.delete(ip);
-}, 60_000).unref();
-
-function clientIp(c) {
-  return (
-    c.req.header("x-forwarded-for")?.split(",")[0].trim() ||
-    c.env?.incoming?.socket?.remoteAddress ||
-    "unknown"
-  );
-}
+/* No session ceiling and no per-IP request cap. A stream lives as long as
+ * someone keeps speaking; the page hangs up by itself after a minute of
+ * silence, which is what stops a forgotten tab from billing forever. */
 
 function originAllowed(origin, host) {
   // Browsers omit Origin on same-origin GETs, and curl omits it entirely.
@@ -104,11 +73,6 @@ app.post("/api/soniox-token", async (c) => {
     return c.json({ error: "Origin not allowed." }, 403);
   }
 
-  const ip = clientIp(c);
-  if (overLimit(ip)) {
-    return c.json({ error: "Too many requests. Slow down." }, 429);
-  }
-
   if (!API_KEY) {
     return c.json(
       { error: "SONIOX_API_KEY is not set on the server. See .env.example." },
@@ -127,7 +91,6 @@ app.post("/api/soniox-token", async (c) => {
       body: JSON.stringify({
         usage_type: "transcribe_websocket",
         expires_in_seconds: TOKEN_TTL_SECONDS,
-        max_session_duration_seconds: MAX_SESSION_SECONDS,
       }),
     });
   } catch (err) {
