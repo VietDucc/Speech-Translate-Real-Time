@@ -1,0 +1,134 @@
+/**
+ * Live Translate — API app
+ * ------------------------------------------------------------------
+ * Holds the long-lived Soniox API key and mints short-lived temporary
+ * keys for the browser. Audio never touches this server: the page still
+ * opens its WebSocket straight to Soniox, so we add zero latency and
+ * zero bandwidth cost, while the real key never leaves the machine.
+ *
+ * Endpoints
+ *   POST /api/soniox-token   → { api_key, expires_at }
+ *   GET  /api/health         → { ok, configured }
+ *   /api/rooms/*             → live rooms (see rooms.js)
+ *
+ * Only the routes live here — no static files and no listen() — so the
+ * same app can run behind the local node server (server.js) or as a
+ * Vercel function (api/[...route].js).
+ */
+
+import { Hono } from "hono";
+
+import { roomsApp } from "./rooms.js";
+
+const API_KEY = process.env.SONIOX_API_KEY;
+
+// Only these origins may mint a token. Anything else gets 403 — otherwise a
+// public deployment lets strangers burn through your Soniox credit.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+// How long the browser has to OPEN a stream (not how long it may talk).
+const TOKEN_TTL_SECONDS = Number(process.env.TOKEN_TTL_SECONDS ?? 60);
+
+const SONIOX_TOKEN_URL = "https://api.soniox.com/v1/auth/temporary-api-key";
+
+export const app = new Hono();
+
+/* No session ceiling and no per-IP request cap. A stream lives as long as
+ * someone keeps speaking; the page hangs up by itself after a minute of
+ * silence, which is what stops a forgotten tab from billing forever. */
+
+function originAllowed(origin, host) {
+  // Browsers omit Origin on same-origin GETs, and curl omits it entirely.
+  if (!origin) return true;
+
+  // An explicit allow-list always wins.
+  if (ALLOWED_ORIGINS.length > 0) return ALLOWED_ORIGINS.includes(origin);
+
+  // No list configured. Accept the page we serve ourselves — the Origin of a
+  // same-origin POST equals the Host header — so a fresh deploy works without
+  // extra config, while a third-party site embedding us is still refused.
+  try {
+    if (host && new URL(origin).host === host) return true;
+  } catch {
+    return false; // malformed Origin
+  }
+
+  // Plus localhost on any port, for development.
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+}
+
+/* ------------------------------------------------------------------ */
+
+app.get("/api/health", (c) =>
+  c.json({ ok: true, configured: Boolean(API_KEY) }),
+);
+
+app.post("/api/soniox-token", async (c) => {
+  // Cheapest rejections first, so a hostile caller learns nothing about setup.
+  const origin = c.req.header("origin");
+  if (!originAllowed(origin, c.req.header("host"))) {
+    console.warn(`[token] rejected origin ${origin}`);
+    return c.json({ error: "Origin not allowed." }, 403);
+  }
+
+  if (!API_KEY) {
+    return c.json(
+      { error: "SONIOX_API_KEY is not set on the server. See .env.example." },
+      500,
+    );
+  }
+
+  let res;
+  try {
+    res = await fetch(SONIOX_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        usage_type: "transcribe_websocket",
+        expires_in_seconds: TOKEN_TTL_SECONDS,
+      }),
+    });
+  } catch (err) {
+    console.error("[token] cannot reach Soniox:", err.message);
+    return c.json({ error: "Cannot reach Soniox." }, 502);
+  }
+
+  const text = await res.text();
+
+  if (!res.ok) {
+    // Log upstream detail server-side; never leak it (or the key) to the page.
+    console.error(`[token] Soniox ${res.status}: ${text.slice(0, 300)}`);
+    return c.json({ error: `Soniox rejected the request (${res.status}).` }, 502);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return c.json({ error: "Malformed response from Soniox." }, 502);
+  }
+
+  // Verified shape: { api_key: "temp:…", expires_at: "<ISO8601>" }
+  if (!data.api_key) {
+    console.error("[token] unexpected response fields:", Object.keys(data));
+    return c.json({ error: "No key in Soniox response." }, 502);
+  }
+
+  c.header("Cache-Control", "no-store");
+  return c.json({ api_key: data.api_key, expires_at: data.expires_at ?? null });
+});
+
+/* Live rooms: create / list / join / publish / watch.
+ *
+ * Rooms keep their state in this process's memory. That is fine behind one
+ * long-lived server and broken on serverless, where the publish POST and the
+ * viewer's SSE stream can land in different instances — see README §12. */
+app.route("/api/rooms", roomsApp);
+
+export default app;

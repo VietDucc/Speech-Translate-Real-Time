@@ -160,7 +160,10 @@ Speech-Translate-Real-Time/
 │   ├── index.html          app dịch (giao diện + xử lý audio + WebSocket Soniox)
 │   ├── rooms.html          lobby: tạo phòng, vào phòng, xem trực tiếp
 │   └── theme.js            design token dùng chung
-├── server.js               cấp temporary key + phục vụ file tĩnh
+├── api/
+│   └── [...route].js       entry point khi chạy trên Vercel
+├── app.js                  các route API: cấp temporary key + rooms
+├── server.js               chạy app.js dưới dạng server thường + phục vụ file tĩnh
 ├── rooms.js                quản lý phòng + kênh SSE cho người xem
 ├── .env                    key thật (KHÔNG commit)
 └── package.json
@@ -195,7 +198,37 @@ Deploy **một service duy nhất** — server này phục vụ cả trang lẫn
 
 Bắt buộc **HTTPS** — micro chỉ hoạt động trên secure context. Các nền tảng trên đều cấp HTTPS sẵn.
 
-> Cảnh báo: bất kỳ ai mở được URL đều xin được token và tiêu credit Soniox của bạn. Hiện chỉ có rate limit và kiểm tra origin. Nếu định để công khai thì cần thêm lớp đăng nhập.
+> Cảnh báo: bất kỳ ai mở được URL đều xin được token và tiêu credit Soniox của bạn. Hiện chỉ còn kiểm tra origin, không còn rate limit. Nếu định để công khai thì cần thêm lớp đăng nhập.
+
+### 12.1 Vercel
+
+Repo đã có sẵn `api/[...route].js` — Vercel tự nhận `api/` thành function và phục vụ `public/` như static, nên **không cần `vercel.json`, không cần build command**.
+
+```bash
+npm i -g vercel
+vercel login
+vercel            # deploy preview, trả về URL để thử
+vercel --prod     # deploy production
+```
+
+Hoặc qua giao diện: push repo lên GitHub → vercel.com → **Add New… → Project** → import repo → Framework Preset để **Other** → Deploy.
+
+Sau đó vào **Project → Settings → Environment Variables**, thêm cho cả Production và Preview:
+
+| Biến | Giá trị |
+|---|---|
+| `SONIOX_API_KEY` | key thật của bạn |
+| `ALLOWED_ORIGINS` | `https://<tên-project>.vercel.app` (khuyến nghị, chặn site khác gọi nhờ) |
+
+Thêm biến xong phải **Redeploy** thì function mới đọc được. File `.env` đang bị gitignore nên không lên theo — đúng như mong muốn.
+
+Kiểm tra nhanh: mở `https://<project>.vercel.app/api/health`, phải thấy `{"ok":true,"configured":true}`. `configured:false` nghĩa là chưa có `SONIOX_API_KEY`.
+
+**Tính năng phòng (rooms) không chạy được trên Vercel.** Mỗi request rơi vào một instance riêng, trong khi phòng lưu bằng `Map` trong RAM của một tiến trình: host POST `/publish` ở instance này, viewer mở SSE ở instance khác nên không nhận được gì; SSE cũng bị cắt khi function hết thời gian chạy. Dịch trực tiếp trên một máy (trang chính) vẫn chạy bình thường vì audio đi thẳng từ trình duyệt tới Soniox, server chỉ cấp token.
+
+Muốn dùng rooms thì chọn một trong hai:
+- Deploy `npm start` lên nền tảng có tiến trình chạy liên tục (Render, Railway, Fly, VPS) — chạy nguyên vẹn, không cần sửa gì.
+- Hoặc viết lại `rooms.js` dùng store dùng chung (Upstash Redis…) thay cho `Map`.
 
 ---
 
