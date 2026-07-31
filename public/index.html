@@ -1,0 +1,1474 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Live Translate — Soniox</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      /* ─────────────────────────────────────────────────────────────────────────
+   DESIGN TOKENS — Playful Geometric
+   Single source of truth. Nothing below hard-codes a colour or a shadow.
+   ───────────────────────────────────────────────────────────────────────── */
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              paper: "#FFFDF5", // warm cream, the "paper" the stickers sit on
+              ink: "#1E293B", // slate-800, softer than black
+              muted: "#F1F5F9",
+              dim: "#64748B",
+              line: "#E2E8F0",
+              accent: "#8B5CF6", // vivid violet — primary actions, language A
+              pink: "#F472B6", // hot pink — language B
+              amber: "#FBBF24", // optimism — decoration, hover fills
+              mint: "#34D399", // freshness — "listening" state
+            },
+            fontFamily: {
+              // Be Vietnam Pro ships the full Vietnamese subset; Outfit only
+              // covers latin/latin-ext, so ệ ỗ ữ fell back to another face.
+              display: ["Be Vietnam Pro", "system-ui", "sans-serif"],
+              body: ['"Plus Jakarta Sans"', "system-ui", "sans-serif"],
+            },
+            borderRadius: { sm: "8px", md: "16px", lg: "24px" },
+            borderWidth: { DEFAULT: "2px" },
+            boxShadow: {
+              pop: "4px 4px 0px 0px #1E293B",
+              "pop-lg": "6px 6px 0px 0px #1E293B",
+              "pop-sm": "2px 2px 0px 0px #1E293B",
+              sticker: "8px 8px 0px 0px #E2E8F0",
+              "sticker-pink": "8px 8px 0px 0px #F472B6",
+              "sticker-violet": "8px 8px 0px 0px #8B5CF6",
+              focus: "4px 4px 0px 0px #8B5CF6",
+            },
+            transitionTimingFunction: {
+              bounce: "cubic-bezier(0.34,1.56,0.64,1)",
+            },
+            keyframes: {
+              popin: {
+                "0%": { opacity: "0", transform: "scale(.86) translateY(8px)" },
+                "60%": { opacity: "1", transform: "scale(1.03) translateY(0)" },
+                "100%": { transform: "scale(1)" },
+              },
+              wiggle: {
+                "0%,100%": { transform: "rotate(0deg)" },
+                "30%": { transform: "rotate(4deg)" },
+                "65%": { transform: "rotate(-4deg)" },
+              },
+              blip: { "50%": { opacity: ".25", transform: "scale(.8)" } },
+            },
+            animation: {
+              popin: "popin .34s cubic-bezier(0.34,1.56,0.64,1) both",
+              wiggle: "wiggle .5s ease-in-out",
+              blip: "blip 1s ease-in-out infinite",
+            },
+          },
+        },
+      };
+    </script>
+
+    <style type="text/tailwindcss">
+      /* ───────── base ───────── */
+      @layer base {
+        html,
+        body {
+          height: 100%;
+        }
+        body {
+          @apply bg-paper text-ink font-body overflow-hidden;
+          /* dot-grid texture — strict formation, low contrast */
+          background-image: radial-gradient(#1e293b1f 1.6px, transparent 1.6px);
+          background-size: 22px 22px;
+        }
+        h1,
+        h2 {
+          @apply font-display font-extrabold tracking-tight;
+        }
+        ::selection {
+          @apply bg-amber text-ink;
+        }
+      }
+
+      /* ───────── components ───────── */
+      @layer components {
+        /* the "sticker" card: chunky border + hard offset shadow */
+        .card {
+          @apply rounded-lg border-2 border-ink bg-white shadow-sticker;
+        }
+        .card-featured {
+          @apply shadow-sticker-pink;
+        }
+
+        /* the "candy button" — always used as `btn btn-<variant>` so no rule
+       depends on @apply-ing another custom class */
+        .btn {
+          @apply inline-flex items-center justify-center gap-2 rounded-full border-2 border-ink
+                 font-bold transition-all duration-300 ease-bounce select-none
+                 focus:outline-none focus-visible:ring-4 focus-visible:ring-amber;
+        }
+        .btn-candy {
+          @apply bg-accent text-white shadow-pop
+                       hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-pop-lg
+                       active:translate-x-0.5 active:translate-y-0.5 active:shadow-pop-sm
+                       disabled:translate-x-0 disabled:translate-y-0
+                       disabled:shadow-pop-sm disabled:opacity-40;
+        }
+        .btn-ghost {
+          @apply bg-white text-ink hover:bg-amber
+                       active:translate-x-0.5 active:translate-y-0.5
+                       disabled:opacity-40 disabled:hover:bg-white;
+        }
+        .btn-danger {
+          @apply bg-white text-ink hover:bg-pink
+                        active:translate-x-0.5 active:translate-y-0.5
+                        disabled:opacity-40 disabled:hover:bg-white;
+        }
+
+        /* form fields — hidden hard shadow that snaps into view on focus */
+        .field {
+          @apply h-11 rounded-sm border-2 border-line bg-white px-3 text-[14px] text-ink
+                   shadow-[4px_4px_0px_0px_transparent] outline-none
+                   transition-all duration-200 ease-bounce
+                   focus:border-accent focus:shadow-focus;
+        }
+        .label {
+          @apply text-[10px] font-bold uppercase tracking-[.12em] text-dim;
+        }
+
+        /* chips */
+        .chip {
+          @apply inline-flex h-9 items-center gap-2 rounded-full border-2 border-ink
+                  bg-white px-3 text-[12px] font-bold;
+        }
+
+        /* speech bubbles — shape encodes direction, not just colour */
+        .bub {
+          @apply relative animate-popin break-words rounded-md border-2 border-ink
+                 px-4 py-2.5 text-[16px] leading-[1.5];
+        }
+        .bub-orig {
+          @apply rounded-bl-none bg-white;
+        }
+        .bub-trans {
+          @apply rounded-br-none;
+        }
+        .bub-a-orig {
+          @apply shadow-[3px_3px_0px_0px_#8B5CF6];
+        }
+        .bub-a-trans {
+          @apply bg-accent/10 shadow-[3px_3px_0px_0px_#E2E8F0];
+        }
+        .bub-b-orig {
+          @apply shadow-[3px_3px_0px_0px_#F472B6];
+        }
+        .bub-b-trans {
+          @apply bg-pink/10 shadow-[3px_3px_0px_0px_#E2E8F0];
+        }
+        .bub-live {
+          @apply animate-none border-dashed shadow-none;
+        }
+
+        .tag {
+          @apply mb-1.5 inline-block rounded-full border-2 border-ink px-2 py-[1px]
+                 text-[9px] font-extrabold uppercase tracking-[.14em];
+        }
+        .tag-a {
+          @apply bg-accent text-white;
+        }
+        .tag-b {
+          @apply bg-pink text-ink;
+        }
+        .tag-t {
+          @apply bg-muted text-dim;
+        }
+
+        /* dropdown popover.
+       `hidden` and `scroller` stay OUT of @apply: `scroller` is plain CSS (not a
+       Tailwind class) and would void the whole rule, and a baked-in display:none
+       could not be undone by removing the `hidden` utility at runtime. */
+        .dd-panel {
+          @apply absolute left-0 z-50 mt-2 max-h-72 overflow-y-auto
+                      rounded-md border-2 border-ink bg-white p-1.5 shadow-pop;
+        }
+        .dd-item {
+          @apply flex w-full items-center gap-2.5 rounded-full px-2.5 py-2 text-left
+                     text-[14px] font-medium outline-none transition-colors
+                     hover:bg-amber/40 focus:bg-amber/40;
+        }
+      }
+    </style>
+
+    <style>
+      :root {
+        --sub-size: 40px; /* size of the translated line (the big dark one) */
+        --orig-ratio: 0.4; /* original line = this × --sub-size */
+        --orig-lines: 2; /* rows kept for the grey original */
+        --trans-lines: 3; /* rows kept for the dark translation */
+      }
+
+      /* Captions behave like broadcast subtitles: text starts at the left edge,
+         wraps, and each row is locked to an exact number of lines — a FIXED
+         height, not a max. A max-height would still let a row grow from one to
+         two lines mid-sentence, shoving the other row around and pushing the
+         card into the transcripts above. Fixed height means the caption card
+         never changes size no matter how long someone talks. Older words scroll
+         out of the top (scrollTop is driven from JS) and the newest ones stay
+         on the bottom line. */
+      #subOrig,
+      #subTrans {
+        overflow: hidden;
+        width: 100%;
+        flex: none;
+      }
+      #subOrig {
+        font-size: calc(var(--sub-size) * var(--orig-ratio));
+        line-height: 1.4;
+        height: calc(1.4em * var(--orig-lines));
+      }
+      #subTrans {
+        font-size: var(--sub-size);
+        line-height: 1.24;
+        height: calc(1.24em * var(--trans-lines));
+      }
+
+      /* thin scrollbars that match the chunky look */
+      .scroller::-webkit-scrollbar {
+        width: 10px;
+      }
+      .scroller::-webkit-scrollbar-thumb {
+        background: #1e293b;
+        border-radius: 99px;
+        border: 3px solid transparent;
+        background-clip: content-box;
+      }
+
+      /* chunky range slider */
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        background: transparent;
+        outline: none;
+      }
+      input[type="range"]::-webkit-slider-runnable-track {
+        height: 10px;
+        border-radius: 99px;
+        background: #f1f5f9;
+        border: 2px solid #1e293b;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #fbbf24;
+        border: 2px solid #1e293b;
+        box-shadow: 2px 2px 0 #1e293b;
+        margin-top: -7px;
+        cursor: pointer;
+      }
+
+      /* caption-only mode */
+      body.overlay > :not(#subbar):not(#hint) {
+        display: none;
+      }
+      body.overlay {
+        padding: 0;
+      }
+      body.overlay #subbar {
+        flex: 1;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        margin: 0;
+        padding: 6vh 7vw;
+      }
+      body.overlay #subIdle {
+        display: none;
+      }
+      body.overlay #hint {
+        display: flex;
+      }
+      body.chroma #subbar {
+        background: #00b140;
+      }
+      body.chroma #subbar .decor {
+        display: none;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.001ms !important;
+        }
+        .btn:hover {
+          transform: none !important;
+        }
+      }
+    </style>
+  </head>
+
+  <body class="m-0 flex flex-col gap-4 px-4 pb-4 md:px-6 md:pb-6">
+    <!-- ══════════════════════ toolbar ══════════════════════ -->
+    <section
+      id="toolbar"
+      class="card relative hidden flex-none flex-wrap items-end gap-4 px-5 py-4 md:flex"
+    >
+      <!-- confetti -->
+      <span
+        class="pointer-events-none absolute -right-3 -top-3 hidden h-7 w-7 rotate-12 rounded-full border-2 border-ink bg-mint md:block"
+        aria-hidden="true"
+      ></span>
+
+      <div class="flex flex-col gap-1.5">
+        <span class="label">Language A</span>
+        <div id="ddA" class="relative"></div>
+      </div>
+
+      <button
+        id="btnSwap"
+        title="Swap languages"
+        aria-label="Swap languages"
+        class="btn btn-ghost mb-0.5 h-11 w-11 shadow-pop-sm hover:animate-wiggle"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          class="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 8h14M13 4l4 4-4 4M21 16H7M11 12l-4 4 4 4" />
+        </svg>
+      </button>
+
+      <div class="flex flex-col gap-1.5">
+        <span class="label">Language B</span>
+        <div id="ddB" class="relative"></div>
+      </div>
+
+
+      <div class="flex flex-col gap-1.5">
+        <span class="label">Microphone</span>
+        <div id="ddMic" class="relative"></div>
+      </div>
+
+      <div class="flex-1"></div>
+
+      <!-- shown only while this tab is broadcasting to a room -->
+      <span
+        id="roomChip"
+        class="chip mb-0.5 hidden h-11 !border-mint bg-mint/20 px-4 text-[13px]"
+        title="Đang phát trực tiếp lên phòng"
+      >
+        <span
+          class="h-2.5 w-2.5 animate-blip rounded-full border-2 border-ink bg-mint"
+          aria-hidden="true"
+        ></span>
+        LIVE
+        <span id="roomCode" class="font-mono tracking-[.1em]"></span>
+      </span>
+
+      <a
+        href="/rooms.html"
+        title="Phòng trực tiếp"
+        aria-label="Phòng trực tiếp"
+        class="btn btn-ghost mb-0.5 h-11 w-11"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          class="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9.5" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      </a>
+
+      <label class="flex flex-col gap-1.5">
+        <span class="label">Caption size</span>
+        <input
+          id="size"
+          type="range"
+          min="22"
+          max="88"
+          value="40"
+          class="h-11 w-28"
+        />
+      </label>
+
+      <button
+        id="btnOverlay"
+        title="Captions only"
+        aria-label="Captions only"
+        class="btn btn-ghost mb-0.5 h-11 w-11 shadow-pop-sm"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          class="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path
+            d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"
+          />
+        </svg>
+      </button>
+
+      <button
+        id="btnStop"
+        disabled
+        class="btn btn-danger mb-0.5 h-11 pl-5 pr-2 text-[14px] shadow-pop-sm"
+      >
+        Stop
+        <span
+          class="grid h-8 w-8 place-items-center rounded-full border-2 border-ink bg-white"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            class="h-3.5 w-3.5"
+            fill="#1E293B"
+            stroke="#1E293B"
+            stroke-width="2.5"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="6" y="6" width="12" height="12" rx="2" />
+          </svg>
+        </span>
+      </button>
+
+      <button
+        id="btnStart"
+        class="btn btn-candy mb-0.5 h-11 pl-5 pr-2 text-[14px]"
+      >
+        Start
+        <span
+          class="grid h-8 w-8 place-items-center rounded-full border-2 border-ink bg-white"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            class="h-4 w-4"
+            fill="none"
+            stroke="#8B5CF6"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="9" y="2" width="6" height="11" rx="3" />
+            <path d="M5 10a7 7 0 0 0 14 0M12 17v5" />
+          </svg>
+        </span>
+      </button>
+    </section>
+
+    <div
+      id="err"
+      class="hidden flex-none items-center gap-3 rounded-md border-2 border-ink bg-pink/25 px-4 py-3 text-[14px] font-medium shadow-pop-sm"
+    >
+      <span
+        class="grid h-7 w-7 flex-none place-items-center rounded-full border-2 border-ink bg-pink"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          class="h-4 w-4"
+          fill="none"
+          stroke="#1E293B"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 8v5M12 17h.01" />
+        </svg>
+      </span>
+      <span id="errText"></span>
+    </div>
+
+    <!-- ══════════════════════ transcripts ══════════════════════ -->
+    <!-- On phones / narrow windows only track B is kept, next to the captions. -->
+    <main class="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2">
+      <section
+        id="trackA"
+        class="card hidden min-h-0 min-w-0 flex-col overflow-hidden md:flex"
+      >
+        <h2
+          class="flex flex-none items-center gap-3 border-b-2 border-ink bg-accent px-4 py-3 text-[13px] uppercase tracking-[.1em] text-white"
+        >
+          <span
+            class="grid h-7 w-7 flex-none place-items-center rounded-full border-2 border-ink bg-white"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              class="h-4 w-4"
+              fill="none"
+              stroke="#8B5CF6"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 21a8 8 0 1 0-16 0" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </span>
+          <span id="nameA">Language A</span>
+          <span
+            id="cntA"
+            class="ml-auto grid h-7 min-w-[28px] place-items-center rounded-full border-2 border-ink bg-white px-1.5 text-[12px] text-ink"
+            >0</span
+          >
+        </h2>
+        <div
+          id="logA"
+          class="scroller flex flex-1 flex-col gap-3 overflow-y-auto scroll-smooth p-4"
+        ></div>
+      </section>
+
+      <section
+        id="trackB"
+        class="card flex min-h-0 min-w-0 flex-col overflow-hidden"
+      >
+        <h2
+          class="flex flex-none items-center gap-3 border-b-2 border-ink bg-pink px-4 py-3 text-[13px] uppercase tracking-[.1em] text-ink"
+        >
+          <span
+            class="grid h-7 w-7 flex-none place-items-center rounded-full border-2 border-ink bg-white"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              class="h-4 w-4"
+              fill="none"
+              stroke="#F472B6"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 21a8 8 0 1 0-16 0" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </span>
+          <span id="nameB">Language B</span>
+          <span
+            id="cntB"
+            class="ml-auto grid h-7 min-w-[28px] place-items-center rounded-full border-2 border-ink bg-white px-1.5 text-[12px] text-ink"
+            >0</span
+          >
+        </h2>
+        <div
+          id="logB"
+          class="scroller flex flex-1 flex-col gap-3 overflow-y-auto scroll-smooth p-4"
+        ></div>
+      </section>
+    </main>
+
+    <!-- ══════════════════════ captions + transport ══════════════════════ -->
+    <section
+      id="subbar"
+      class="card card-featured relative flex flex-none flex-col justify-end gap-4 overflow-hidden px-5 py-6 text-left md:px-8 md:py-7"
+    >
+      <!-- decoration lives on the right so it never sits under the start of a line -->
+      <span
+        class="decor pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-amber/30"
+        aria-hidden="true"
+      ></span>
+      <span
+        class="decor pointer-events-none absolute -bottom-20 -right-8 h-52 w-52 rounded-full border-2 border-dashed border-mint/70"
+        aria-hidden="true"
+      ></span>
+      <span
+        class="decor pointer-events-none absolute right-10 top-8 hidden h-0 w-0 -rotate-12 md:block"
+        style="
+          border-left: 14px solid transparent;
+          border-right: 14px solid transparent;
+          border-bottom: 24px solid #f472b6;
+        "
+        aria-hidden="true"
+      ></span>
+
+      <!-- sizes live in the :root block, not inline -->
+      <div
+        id="subOrig"
+        class="relative break-words font-display font-semibold text-dim"
+      ></div>
+
+      <div
+        id="subTrans"
+        class="relative break-words font-display font-extrabold tracking-tight"
+        aria-live="polite"
+      ></div>
+
+      <!-- status + idle state; absolutely positioned so showing or hiding it
+           never resizes the caption card -->
+      <div
+        id="subIdle"
+        class="absolute bottom-6 left-5 inline-flex items-center gap-3 rounded-full border-2 border-dashed border-line bg-white px-4 py-2 font-display text-[12px] font-bold uppercase tracking-[.14em] text-dim md:bottom-7 md:left-8 md:px-5 md:py-2.5 md:text-[13px]"
+      >
+        <span
+          id="subIdleDot"
+          class="h-2.5 w-2.5 rounded-full border-2 border-ink bg-amber"
+          aria-hidden="true"
+        ></span>
+        <span id="subIdleText">Press Start, or hit Space</span>
+      </div>
+    </section>
+
+    <div
+      id="hint"
+      class="fixed right-5 top-5 hidden items-center gap-2 rounded-full border-2 border-ink bg-white px-4 py-2 text-[12px] font-bold shadow-pop-sm"
+    >
+      Esc exit · G green screen · Space start/stop
+    </div>
+
+    <script>
+      /* =========================================================================
+   Soniox realtime — two-way speech translation with on-screen captions.
+   Flow: mic → AudioWorklet → PCM s16le → WebSocket → tokens → UI
+   ========================================================================= */
+
+      const LANGS = [
+        ["en", "English"],
+        ["vi", "Vietnamese"],
+        ["zh", "Chinese"],
+        ["ja", "Japanese"],
+        ["ko", "Korean"],
+        ["fr", "French"],
+        ["de", "German"],
+        ["es", "Spanish"],
+        ["pt", "Portuguese"],
+        ["ru", "Russian"],
+        ["th", "Thai"],
+        ["id", "Indonesian"],
+        ["ms", "Malay"],
+        ["hi", "Hindi"],
+        ["ar", "Arabic"],
+        ["it", "Italian"],
+        ["nl", "Dutch"],
+        ["tr", "Turkish"],
+        ["pl", "Polish"],
+        ["uk", "Ukrainian"],
+        ["sv", "Swedish"],
+        ["da", "Danish"],
+        ["no", "Norwegian"],
+        ["fi", "Finnish"],
+        ["cs", "Czech"],
+        ["el", "Greek"],
+        ["he", "Hebrew"],
+        ["ro", "Romanian"],
+        ["hu", "Hungarian"],
+        ["tl", "Tagalog"],
+      ];
+
+      const WS_URL = "wss://stt-rt.soniox.com/transcribe-websocket";
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) =>
+        String(s).replace(
+          /[&<>"]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+        );
+
+      /* empty state — primitive shapes instead of a bare sentence */
+      const EMPTY = `
+  <div class="empty m-auto flex flex-col items-center gap-4 py-6 text-center">
+    <span class="flex items-center gap-2" aria-hidden="true">
+      <i class="h-6 w-6 rounded-full border-2 border-ink bg-amber"></i>
+      <i class="block h-0 w-0" style="border-left:12px solid transparent;border-right:12px solid transparent;border-bottom:20px solid #34D399"></i>
+      <i class="h-6 w-6 rotate-12 rounded-sm border-2 border-ink bg-pink"></i>
+    </span>
+    <span class="font-display text-[14px] font-bold uppercase tracking-[.14em] text-dim">Nothing yet</span>
+  </div>`;
+
+      /* =========================================================================
+   Dropdown menu — sticker popover, keyboard navigable.
+   ========================================================================= */
+      function Dropdown(hostId, opts) {
+        const host = $(hostId);
+        let items = opts.items,
+          value = opts.value;
+
+        host.innerHTML = `
+    <button type="button" class="dd-btn field flex ${opts.width || "w-44"} items-center gap-2 text-left font-medium">
+      <span class="dd-label flex-1 truncate"></span>
+      <svg viewBox="0 0 24 24" class="h-4 w-4 flex-none" fill="none" stroke="#1E293B"
+           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M6 9l6 6 6-6"/>
+      </svg>
+    </button>
+    <div class="dd-panel scroller hidden ${opts.menuWidth || "w-60"}"></div>`;
+
+        const btn = host.querySelector(".dd-btn");
+        const label = host.querySelector(".dd-label");
+        const menu = host.querySelector(".dd-panel");
+
+        const CHECK = `<span class="grid h-5 w-5 flex-none place-items-center rounded-full border-2 border-ink bg-mint">
+      <svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="#1E293B" stroke-width="3.5"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>`;
+        const BLANK = `<span class="h-5 w-5 flex-none rounded-full border-2 border-dashed border-line"></span>`;
+
+        function paintLabel() {
+          const hit = items.find((i) => i.value === value);
+          label.textContent = hit ? hit.label : opts.placeholder || "—";
+        }
+        function paintMenu() {
+          menu.innerHTML = items
+            .map(
+              (it) => `
+      <button type="button" data-v="${esc(it.value)}" class="dd-item">
+        ${it.value === value ? CHECK : BLANK}
+        <span class="truncate">${esc(it.label)}</span>
+      </button>`,
+            )
+            .join("");
+        }
+
+        function open() {
+          closeAll(menu);
+          paintMenu();
+          menu.classList.remove("hidden");
+          menu
+            .querySelector(`[data-v="${CSS.escape(String(value))}"]`)
+            ?.scrollIntoView({ block: "nearest" });
+        }
+        function close() {
+          menu.classList.add("hidden");
+        }
+
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          menu.classList.contains("hidden") ? open() : close();
+        };
+        menu.onclick = (e) => {
+          const it = e.target.closest(".dd-item");
+          if (!it) return;
+          close();
+          if (it.dataset.v === value) return;
+          value = it.dataset.v;
+          paintLabel();
+          opts.onChange?.(value);
+        };
+        host.onkeydown = (e) => {
+          const isOpen = !menu.classList.contains("hidden");
+          if (e.key === "Escape" && isOpen) {
+            e.stopPropagation();
+            close();
+            btn.focus();
+            return;
+          }
+          if (!["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) return;
+          if (!isOpen) {
+            if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
+              e.preventDefault();
+              open();
+            }
+            return;
+          }
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            const list = [...menu.querySelectorAll(".dd-item")];
+            const cur = list.indexOf(document.activeElement);
+            const next =
+              e.key === "ArrowDown"
+                ? cur < 0
+                  ? 0
+                  : Math.min(cur + 1, list.length - 1)
+                : cur < 0
+                  ? list.length - 1
+                  : Math.max(cur - 1, 0);
+            list[next]?.focus();
+          }
+        };
+
+        paintLabel();
+        return {
+          get value() {
+            return value;
+          },
+          set(v) {
+            value = v;
+            paintLabel();
+          },
+          setItems(next) {
+            items = next;
+            paintLabel();
+            if (!menu.classList.contains("hidden")) paintMenu();
+          },
+          close,
+        };
+      }
+      function closeAll(except) {
+        document.querySelectorAll(".dd-panel").forEach((m) => {
+          if (m !== except) m.classList.add("hidden");
+        });
+      }
+      document.addEventListener("click", () => closeAll());
+      const anyMenuOpen = () =>
+        !!document.querySelector(".dd-panel:not(.hidden)");
+
+      /* =========================================================================
+   State
+   ========================================================================= */
+      let socket = null,
+        audioCtx = null,
+        micStream = null,
+        node = null,
+        srcNode = null;
+      let running = false;
+      let langA = "en",
+        langB = "vi";
+      // One "track" per language. Track A collects everything in language A —
+      // what A said plus the translation of what B said — and vice versa.
+      let buf = { a: { fin: "", live: "" }, b: { fin: "", live: "" } };
+      let spokenBy = null; // 'a' | 'b' — language currently being spoken
+      let count = { a: 0, b: 0 };
+      let endTimer = null; // debounce before committing a finished utterance
+
+      /* =========================================================================
+   Broadcasting to a room
+   The host key arrives in the URL fragment (#room=…&host=…). Fragments are
+   never sent to the server, so the key stays out of access logs and Referer
+   headers. It is kept in sessionStorage so a refresh does not drop the
+   broadcast, and dies with the tab.
+   ========================================================================= */
+      let room = null; // { code, hostToken }
+
+      (function adoptRoomFromUrl() {
+        const frag = new URLSearchParams(location.hash.slice(1));
+        const code = frag.get("room"),
+          hostToken = frag.get("host");
+        if (code && hostToken) {
+          room = { code, hostToken };
+          sessionStorage.setItem("sx_room", JSON.stringify(room));
+          if (frag.get("a")) localStorage.setItem("sx_langA", frag.get("a"));
+          if (frag.get("b")) localStorage.setItem("sx_langB", frag.get("b"));
+          // Drop the key from the address bar so it is not shoulder-surfed
+          // or pasted along with the URL.
+          history.replaceState(null, "", location.pathname + location.search);
+        } else {
+          try {
+            room = JSON.parse(sessionStorage.getItem("sx_room") || "null");
+          } catch {
+            room = null;
+          }
+        }
+      })();
+
+      // Captions change ~8×/s; posting each one would be wasteful. Send at most
+      // one live update per PUBLISH_MS, always keeping the newest state.
+      const PUBLISH_MS = 250;
+      let pendingLive = null,
+        publishTimer = null;
+
+      async function postRoom(payload) {
+        if (!room) return;
+        try {
+          const res = await fetch(`/api/rooms/${room.code}/publish`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ hostToken: room.hostToken, ...payload }),
+          });
+          if (res.status === 403 || res.status === 404) {
+            // Room closed or the key was revoked — stop trying.
+            console.warn("[room] broadcast stopped:", res.status);
+            leaveRoom();
+          }
+        } catch {
+          /* offline; the next tick will retry */
+        }
+      }
+
+      function broadcastLive(live) {
+        if (!room) return;
+        pendingLive = live;
+        if (publishTimer) return;
+        publishTimer = setTimeout(() => {
+          publishTimer = null;
+          const live = pendingLive;
+          pendingLive = null;
+          if (live) postRoom({ live });
+        }, PUBLISH_MS);
+      }
+
+      function broadcastLine(line) {
+        if (!room || (!line.orig && !line.trans)) return;
+        clearTimeout(publishTimer);
+        publishTimer = null;
+        pendingLive = null;
+        postRoom({ line }); // finished sentences go out immediately
+      }
+
+      function leaveRoom() {
+        room = null;
+        sessionStorage.removeItem("sx_room");
+        paintRoomChip();
+      }
+
+      function paintRoomChip() {
+        const chip = $("roomChip");
+        if (!chip) return;
+        chip.classList.toggle("hidden", !room);
+        chip.classList.toggle("inline-flex", !!room);
+        if (room) $("roomCode").textContent = room.code;
+      }
+
+      const LANG_ITEMS = LANGS.map(([value, label]) => ({ value, label }));
+      langA = localStorage.getItem("sx_langA") || "en";
+      langB = localStorage.getItem("sx_langB") || "vi";
+
+      const ddA = Dropdown("ddA", {
+        items: LANG_ITEMS,
+        value: langA,
+        onChange: (v) => {
+          langA = v;
+          saveLangs();
+        },
+      });
+      const ddB = Dropdown("ddB", {
+        items: LANG_ITEMS,
+        value: langB,
+        onChange: (v) => {
+          langB = v;
+          saveLangs();
+        },
+      });
+      const ddMic = Dropdown("ddMic", {
+        items: [{ value: "", label: "System default" }],
+        value: "",
+        width: "w-52",
+        menuWidth: "w-64",
+      });
+
+      // A key was kept here back when it was typed into the page. The server
+      // mints short-lived keys now, so wipe any leftover from older visits.
+      localStorage.removeItem("sx_key");
+
+      $("size").oninput = (e) =>
+        document.documentElement.style.setProperty(
+          "--sub-size",
+          e.target.value + "px",
+        );
+
+      function syncNames() {
+        const nm = (c) => (LANGS.find((l) => l[0] === c) || [c, c])[1];
+        $("nameA").textContent = nm(langA);
+        $("nameB").textContent = nm(langB);
+      }
+      function saveLangs() {
+        syncNames();
+        localStorage.setItem("sx_langA", langA);
+        localStorage.setItem("sx_langB", langB);
+        if (running) restart();
+      }
+      syncNames();
+
+      $("btnSwap").onclick = () => {
+        [langA, langB] = [langB, langA];
+        ddA.set(langA);
+        ddB.set(langB);
+        saveLangs();
+      };
+
+      /* device labels only appear once permission has been granted */
+      async function listMics() {
+        try {
+          const devs = await navigator.mediaDevices.enumerateDevices();
+          const ins = devs.filter((d) => d.kind === "audioinput");
+          ddMic.setItems(
+            [{ value: "", label: "System default" }].concat(
+              ins.map((d, i) => ({
+                value: d.deviceId,
+                label: d.label || "Microphone " + (i + 1),
+              })),
+            ),
+          );
+        } catch (_) {}
+      }
+      listMics();
+      navigator.mediaDevices.addEventListener?.("devicechange", listMics);
+
+      /* =========================================================================
+   Status / errors
+   ========================================================================= */
+      // With the top bar gone, the caption card's idle pill is the only place
+      // connection state is reported, so setStatus feeds it instead of a chip.
+      const DOT = {
+        on: "bg-mint animate-blip",
+        err: "bg-pink",
+        wait: "bg-amber animate-blip",
+        "": "bg-amber",
+      };
+      let statusText = "Press Start, or hit Space",
+        statusKind = "";
+      function setStatus(text, kind) {
+        statusText = text;
+        statusKind = kind || "";
+        paintIdle();
+      }
+      function paintIdle() {
+        $("subIdleText").textContent = statusText;
+        $("subIdleDot").className =
+          "h-2.5 w-2.5 rounded-full border-2 border-ink " + DOT[statusKind];
+      }
+      function showError(msg) {
+        $("errText").textContent = msg;
+        $("err").classList.remove("hidden");
+        $("err").classList.add("flex");
+        setStatus("Error", "err");
+      }
+      function clearError() {
+        $("err").classList.add("hidden");
+        $("err").classList.remove("flex");
+      }
+
+      /* =========================================================================
+   Rendering
+   ========================================================================= */
+      function trackOf(lang) {
+        if (lang === langA) return "a";
+        if (lang === langB) return "b";
+        return null;
+      }
+      // Shape encodes direction (tail left = original, tail right = translation),
+      // colour only reinforces it — never the sole signal.
+      function bubbleClass(track, spoken, live) {
+        const kind = spoken ? "orig" : "trans";
+        return (
+          `bub bub-${kind} bub-${track}-${kind}` + (live ? " bub-live" : "")
+        );
+      }
+      function fill(el, track, spoken, text) {
+        const tag = spoken
+          ? `<span class="tag tag-${track}">Spoken</span>`
+          : `<span class="tag tag-t">Translation</span>`;
+        el.innerHTML = tag + `<span class="body block"></span>`;
+        el.querySelector(".body").textContent = text;
+      }
+
+      function renderLive() {
+        for (const t of ["a", "b"]) {
+          const log = $("log" + t.toUpperCase());
+          let el = log.querySelector(".bub-live");
+          const text = (buf[t].fin + buf[t].live).trim();
+          if (!text) {
+            el?.remove();
+            continue;
+          }
+          if (!el) {
+            log.querySelector(".empty")?.remove();
+            el = document.createElement("div");
+            log.appendChild(el);
+          }
+          const spoken = spokenBy === t;
+          el.className = bubbleClass(t, spoken, true);
+          fill(el, t, spoken, text);
+          log.scrollTop = log.scrollHeight;
+        }
+        renderSubtitle();
+      }
+      function renderSubtitle() {
+        // Small dim line = the language being spoken; big line = the other one.
+        const src = spokenBy || "a";
+        const dst = src === "a" ? "b" : "a";
+        const get = (t) => (buf[t].fin + buf[t].live).trim();
+        const orig = get(src),
+          trans = get(dst);
+        const so = $("subOrig"),
+          st = $("subTrans");
+        so.textContent = orig;
+        st.textContent = trans;
+        // Keep the tail of a long utterance in view: newest words stay pinned to
+        // the bottom line while earlier ones scroll off the top.
+        so.scrollTop = so.scrollHeight;
+        st.scrollTop = st.scrollHeight;
+
+        // Nothing to show yet — report status instead of leaving a blank slab.
+        $("subIdle").classList.toggle("hidden", !!(orig || trans));
+        paintIdle();
+
+        broadcastLive({ orig, trans, src });
+      }
+      function flush() {
+        const src = spokenBy;
+        if (src) {
+          const other = src === "a" ? "b" : "a";
+          broadcastLine({
+            orig: (buf[src].fin + buf[src].live).trim(),
+            trans: (buf[other].fin + buf[other].live).trim(),
+            src,
+          });
+        }
+        for (const t of ["a", "b"]) {
+          const log = $("log" + t.toUpperCase());
+          log.querySelector(".bub-live")?.remove();
+          const text = (buf[t].fin + buf[t].live).trim();
+          buf[t] = { fin: "", live: "" };
+          if (!text) continue;
+          log.querySelector(".empty")?.remove();
+          const spoken = src === t;
+          const el = document.createElement("div");
+          el.className = bubbleClass(t, spoken, false);
+          fill(el, t, spoken, text);
+          log.appendChild(el);
+          log.scrollTop = log.scrollHeight;
+          count[t]++;
+          $("cnt" + t.toUpperCase()).textContent = count[t];
+        }
+        spokenBy = null;
+      }
+
+      /* =========================================================================
+   Soniox tokens
+   ========================================================================= */
+      function onTokens(tokens) {
+        let ended = false;
+        // Non-final tokens are re-sent in full on every message, so drop the old ones first.
+        buf.a.live = "";
+        buf.b.live = "";
+
+        for (const tk of tokens) {
+          const txt = tk.text ?? "";
+          if (txt === "<end>" || txt === "<fin>") {
+            ended = true;
+            continue;
+          }
+          if (!txt) continue;
+
+          const st = tk.translation_status; // "original" | "translation" | "none"
+          const t =
+            trackOf(tk.language) ??
+            (st === "translation"
+              ? trackOf(tk.source_language) === "a"
+                ? "b"
+                : "a"
+              : "a");
+          if (st === "original" || st === "none" || !st) spokenBy = t;
+
+          if (tk.is_final) buf[t].fin += txt;
+          else buf[t].live += txt;
+        }
+
+        renderLive();
+
+        // The translation trails the original by a beat, so wait a moment after <end>
+        // before committing the line; a newer <end> pushes the deadline back.
+        clearTimeout(endTimer);
+        if (ended) endTimer = setTimeout(flush, 900);
+      }
+
+      /* =========================================================================
+   Audio capture
+   ========================================================================= */
+      const WORKLET = `
+class PCM extends AudioWorkletProcessor{
+  constructor(){ super(); this.parts=[]; this.n=0; }
+  process(inputs){
+    const ch = inputs[0] && inputs[0][0];
+    if(ch){
+      this.parts.push(new Float32Array(ch)); this.n += ch.length;
+      if(this.n >= 2048){
+        const out = new Float32Array(this.n); let o = 0;
+        for(const p of this.parts){ out.set(p,o); o += p.length; }
+        this.parts = []; this.n = 0;
+        this.port.postMessage(out, [out.buffer]);
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('pcm', PCM);`;
+
+      function toInt16(f32) {
+        const out = new Int16Array(f32.length);
+        for (let i = 0; i < f32.length; i++) {
+          const s = Math.max(-1, Math.min(1, f32[i]));
+          out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        return out.buffer;
+      }
+      function pushChunk(f32) {
+        if (socket && socket.readyState === WebSocket.OPEN)
+          socket.send(toInt16(f32));
+      }
+
+      async function openMic() {
+        const id = ddMic.value;
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: id ? { exact: id } : undefined,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: 16000,
+        });
+        await audioCtx.resume();
+        srcNode = audioCtx.createMediaStreamSource(micStream);
+
+        try {
+          const url = URL.createObjectURL(
+            new Blob([WORKLET], { type: "application/javascript" }),
+          );
+          await audioCtx.audioWorklet.addModule(url);
+          URL.revokeObjectURL(url);
+          node = new AudioWorkletNode(audioCtx, "pcm");
+          node.port.onmessage = (e) => pushChunk(e.data);
+          srcNode.connect(node); // never routed to the speakers
+        } catch (_) {
+          // Older browsers: fall back to ScriptProcessor.
+          node = audioCtx.createScriptProcessor(4096, 1, 1);
+          node.onaudioprocess = (e) =>
+            pushChunk(e.inputBuffer.getChannelData(0));
+          srcNode.connect(node);
+          const mute = audioCtx.createGain();
+          mute.gain.value = 0;
+          node.connect(mute);
+          mute.connect(audioCtx.destination);
+        }
+        listMics();
+      }
+
+      /* =========================================================================
+   Start / stop
+   ========================================================================= */
+      /* Ask our own backend for a short-lived Soniox key. The real key never
+         reaches the browser, so there is nothing to type in and nothing to
+         leak from devtools. Returns null when no server answers. */
+      async function fetchTempKey() {
+        try {
+          const res = await fetch("/api/soniox-token", { method: "POST" });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            // A 404 just means "no backend here" — stay quiet and fall back.
+            if (res.status !== 404)
+              console.warn("[token]", body.error || res.status);
+            return null;
+          }
+          const { api_key } = await res.json();
+          return api_key || null;
+        } catch {
+          return null; // no server listening
+        }
+      }
+
+      async function start() {
+        if (langA === langB)
+          return showError("Language A and B must be different.");
+
+        clearError();
+        running = true;
+        $("btnStart").disabled = true;
+        $("btnStop").disabled = false;
+        setStatus("Getting credentials…", "wait");
+        renderSubtitle();
+
+        const key = await fetchTempKey();
+        if (!key) {
+          running = false;
+          $("btnStart").disabled = false;
+          $("btnStop").disabled = true;
+          renderSubtitle();
+          return showError(
+            "Could not get credentials. The page must be served by the token " +
+              "server (npm start) with SONIOX_API_KEY configured — opening the " +
+              "HTML file directly will not work.",
+          );
+        }
+
+        setStatus("Opening microphone…", "wait");
+
+        try {
+          await openMic();
+        } catch (e) {
+          running = false;
+          $("btnStart").disabled = false;
+          $("btnStop").disabled = true;
+          renderSubtitle();
+          return showError("Microphone unavailable: " + e.message);
+        }
+
+        setStatus("Connecting…", "wait");
+        socket = new WebSocket(WS_URL);
+        socket.binaryType = "arraybuffer";
+
+        socket.onopen = () => {
+          socket.send(
+            JSON.stringify({
+              api_key: key,
+              model: "stt-rt-v5",
+              audio_format: "pcm_s16le",
+              sample_rate: audioCtx.sampleRate,
+              num_channels: 1,
+              language_hints: [langA, langB],
+              enable_language_identification: true,
+              enable_endpoint_detection: true,
+              translation: {
+                type: "two_way",
+                language_a: langA,
+                language_b: langB,
+              },
+            }),
+          );
+          setStatus("Listening", "on");
+        };
+
+        socket.onmessage = (ev) => {
+          let d;
+          try {
+            d = JSON.parse(ev.data);
+          } catch (_) {
+            return;
+          }
+          if (d.error_code || d.error_message)
+            return showError(
+              `Soniox ${d.error_code ?? ""}: ${d.error_message ?? "unknown error"}`,
+            );
+          if (Array.isArray(d.tokens) && d.tokens.length) onTokens(d.tokens);
+          if (d.finished) {
+            flush();
+            setStatus("Session finished");
+          }
+        };
+
+        socket.onerror = () =>
+          showError("WebSocket error — check your network or API key.");
+        socket.onclose = (ev) => {
+          if (running) {
+            stop(true);
+            if (ev.code !== 1000)
+              showError(
+                `Connection closed (code ${ev.code}) ${ev.reason || ""}`,
+              );
+          }
+        };
+      }
+
+      function stop(fromClose) {
+        running = false;
+        clearTimeout(endTimer);
+        $("btnStart").disabled = false;
+        $("btnStop").disabled = true;
+
+        try {
+          node &&
+            (node.port ? node.port.close() : (node.onaudioprocess = null));
+        } catch (_) {}
+        try {
+          srcNode?.disconnect();
+          node?.disconnect();
+        } catch (_) {}
+        micStream?.getTracks().forEach((t) => t.stop());
+        try {
+          audioCtx?.close();
+        } catch (_) {}
+        node = srcNode = micStream = audioCtx = null;
+
+        if (socket && !fromClose) {
+          // An empty message tells Soniox the audio is done; it flushes then closes.
+          try {
+            if (socket.readyState === WebSocket.OPEN) socket.send("");
+          } catch (_) {}
+          setTimeout(() => {
+            try {
+              socket?.close(1000);
+            } catch (_) {}
+          }, 400);
+        }
+        flush();
+        renderSubtitle();
+        if (!fromClose) setStatus("Stopped");
+      }
+
+      async function restart() {
+        stop();
+        await new Promise((r) => setTimeout(r, 300));
+        start();
+      }
+
+      function clearAll() {
+        clearTimeout(endTimer);
+        for (const t of ["a", "b"]) {
+          $("log" + t.toUpperCase()).innerHTML = EMPTY;
+          buf[t] = { fin: "", live: "" };
+          count[t] = 0;
+          $("cnt" + t.toUpperCase()).textContent = "0";
+        }
+        spokenBy = null;
+        renderSubtitle();
+        clearError();
+      }
+      clearAll();
+      paintRoomChip();
+
+      /* =========================================================================
+   Buttons & shortcuts
+   ========================================================================= */
+      $("btnStart").onclick = start;
+      $("btnStop").onclick = () => stop();
+      $("btnOverlay").onclick = () => {
+        document.body.classList.toggle("overlay");
+        if (document.body.classList.contains("overlay"))
+          document.documentElement.requestFullscreen?.().catch(() => {});
+        else {
+          document.body.classList.remove("chroma");
+          document.exitFullscreen?.().catch(() => {});
+        }
+      };
+
+      document.addEventListener("keydown", (e) => {
+        if (
+          e.key === "Escape" &&
+          document.body.classList.contains("overlay") &&
+          !anyMenuOpen()
+        ) {
+          document.body.classList.remove("overlay", "chroma");
+          document.exitFullscreen?.().catch(() => {});
+        }
+        if (
+          /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(e.target.tagName) ||
+          anyMenuOpen()
+        )
+          return;
+        if (e.code === "Space") {
+          e.preventDefault();
+          running ? stop() : start();
+        }
+        if (
+          e.key.toLowerCase() === "g" &&
+          document.body.classList.contains("overlay")
+        )
+          document.body.classList.toggle("chroma");
+      });
+
+      window.addEventListener("beforeunload", () => {
+        if (running) stop();
+      });
+    </script>
+  </body>
+</html>

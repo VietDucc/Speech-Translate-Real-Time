@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rooms — Live Translate</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;700&family=JetBrains+Mono:wght@700&display=swap"
+      rel="stylesheet"
+    />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/theme.js"></script>
+
+    <style type="text/tailwindcss">
+      @layer base {
+        html,
+        body {
+          height: 100%;
+        }
+        body {
+          @apply bg-paper text-ink font-body;
+          background-image: radial-gradient(#1e293b1f 1.6px, transparent 1.6px);
+          background-size: 22px 22px;
+        }
+        h1,
+        h2,
+        h3 {
+          @apply font-display font-extrabold tracking-tight;
+        }
+        ::selection {
+          @apply bg-amber text-ink;
+        }
+      }
+
+      @layer components {
+        .card {
+          @apply rounded-lg border-2 border-ink bg-white shadow-sticker;
+        }
+        .btn {
+          @apply inline-flex items-center justify-center gap-2 rounded-full border-2 border-ink
+                 font-bold transition-all duration-300 ease-bounce select-none
+                 focus:outline-none focus-visible:ring-4 focus-visible:ring-amber;
+        }
+        .btn-candy {
+          @apply bg-accent text-white shadow-pop
+                 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-pop-lg
+                 active:translate-x-0.5 active:translate-y-0.5 active:shadow-pop-sm
+                 disabled:translate-x-0 disabled:translate-y-0 disabled:shadow-pop-sm
+                 disabled:opacity-40;
+        }
+        .btn-ghost {
+          @apply bg-white text-ink shadow-pop-sm hover:bg-amber
+                 active:translate-x-0.5 active:translate-y-0.5 disabled:opacity-40;
+        }
+        .field {
+          @apply h-12 w-full rounded-sm border-2 border-line bg-white px-3.5 text-[15px] text-ink
+                 shadow-[4px_4px_0px_0px_transparent] outline-none
+                 transition-all duration-200 ease-bounce
+                 focus:border-accent focus:shadow-focus;
+        }
+        .label {
+          @apply mb-1.5 block text-[10px] font-bold uppercase tracking-[.12em] text-dim;
+        }
+        .chip {
+          @apply inline-flex h-8 items-center gap-2 rounded-full border-2 border-ink
+                 bg-white px-3 text-[12px] font-bold;
+        }
+        .bub {
+          @apply relative animate-popin break-words rounded-md border-2 border-ink
+                 px-4 py-2.5 text-[16px] leading-[1.5];
+        }
+        .tag {
+          @apply mb-1.5 inline-block rounded-full border-2 border-ink px-2 py-[1px]
+                 text-[9px] font-extrabold uppercase tracking-[.14em];
+        }
+      }
+    </style>
+
+    <style>
+      :root {
+        --sub-size: 40px;
+        --orig-ratio: 0.4;
+        --orig-lines: 2;
+        --trans-lines: 3;
+      }
+      /* Same fixed-height rule as the main app: the caption box must never
+         resize while someone is talking. */
+      #vOrig,
+      #vTrans {
+        overflow: hidden;
+        width: 100%;
+        flex: none;
+      }
+      #vOrig {
+        font-size: calc(var(--sub-size) * var(--orig-ratio));
+        line-height: 1.4;
+        height: calc(1.4em * var(--orig-lines));
+      }
+      #vTrans {
+        font-size: var(--sub-size);
+        line-height: 1.24;
+        height: calc(1.24em * var(--trans-lines));
+      }
+      .scroller::-webkit-scrollbar {
+        width: 10px;
+      }
+      .scroller::-webkit-scrollbar-thumb {
+        background: #1e293b;
+        border-radius: 99px;
+        border: 3px solid transparent;
+        background-clip: content-box;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.001ms !important;
+          transition-duration: 0.001ms !important;
+        }
+      }
+    </style>
+  </head>
+
+  <body class="min-h-full">
+    <!-- ═══════════════ LOBBY ═══════════════ -->
+    <div id="lobby" class="mx-auto max-w-5xl px-5 py-8 md:px-8 md:py-12">
+      <header class="mb-8 flex flex-wrap items-center gap-4">
+        <span
+          class="grid h-12 w-12 flex-none -rotate-6 place-items-center rounded-sm border-2 border-ink bg-amber shadow-pop-sm"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            class="h-6 w-6"
+            fill="none"
+            stroke="#1E293B"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 8h14M13 4l4 4-4 4M21 16H7M11 12l-4 4 4 4" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="text-[26px] leading-none">Phòng trực tiếp</h1>
+          <p class="mt-1.5 text-[14px] text-dim">
+            Tạo phòng để người khác xem hội thoại đang được dịch, theo thời gian
+            thực.
+          </p>
+        </div>
+        <div class="flex-1"></div>
+        <a href="/" class="btn btn-ghost h-11 px-5 text-[14px]">← Về app dịch</a>
+      </header>
+
+      <div class="grid gap-6 md:grid-cols-[minmax(0,340px)_1fr]">
+        <!-- ── tạo phòng ── -->
+        <section class="card relative h-fit p-6">
+          <span
+            class="pointer-events-none absolute -right-3 -top-3 h-7 w-7 rotate-12 rounded-full border-2 border-ink bg-mint"
+            aria-hidden="true"
+          ></span>
+          <h2 class="mb-5 text-[18px]">Tạo phòng</h2>
+
+          <form id="createForm" class="flex flex-col gap-4">
+            <div>
+              <label class="label" for="cName">Tên phòng</label>
+              <input
+                id="cName"
+                class="field"
+                maxlength="60"
+                placeholder="Họp với đối tác"
+                required
+              />
+            </div>
+            <div>
+              <label class="label" for="cPass">Mật khẩu</label>
+              <input
+                id="cPass"
+                class="field"
+                type="password"
+                minlength="4"
+                maxlength="100"
+                placeholder="Ít nhất 4 ký tự"
+                required
+              />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="label" for="cLangA">Ngôn ngữ A</label>
+                <select id="cLangA" class="field"></select>
+              </div>
+              <div>
+                <label class="label" for="cLangB">Ngôn ngữ B</label>
+                <select id="cLangB" class="field"></select>
+              </div>
+            </div>
+            <button class="btn btn-candy h-12 px-6 text-[15px]">
+              Tạo phòng
+            </button>
+          </form>
+        </section>
+
+        <!-- ── danh sách phòng ── -->
+        <section>
+          <div class="mb-4 flex items-center gap-3">
+            <h2 class="text-[18px]">Đang mở</h2>
+            <span id="roomCount" class="chip">0</span>
+            <div class="flex-1"></div>
+            <button id="btnRefresh" class="btn btn-ghost h-9 px-4 text-[13px]">
+              Làm mới
+            </button>
+          </div>
+          <div id="roomList" class="grid gap-3"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ═══════════════ MÃ PHÒNG VỪA TẠO ═══════════════ -->
+    <div
+      id="createdModal"
+      class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/40 p-5 backdrop-blur-sm"
+    >
+      <div class="card w-full max-w-md p-7 text-center">
+        <p class="label !mb-3">Mã phòng</p>
+        <p
+          id="createdCode"
+          class="mb-1 select-all font-mono text-[46px] font-bold tracking-[.14em] text-accent"
+        ></p>
+        <p class="mb-6 text-[14px] text-dim">
+          Gửi mã này kèm mật khẩu cho người muốn xem.
+        </p>
+
+        <div class="flex flex-col gap-3">
+          <button id="btnCopyCode" class="btn btn-ghost h-11 px-5 text-[14px]">
+            Sao chép mã
+          </button>
+          <button id="btnCopyLink" class="btn btn-ghost h-11 px-5 text-[14px]">
+            Sao chép link cho người xem
+          </button>
+          <a
+            id="btnHost"
+            class="btn btn-candy h-12 px-6 text-[15px]"
+            href="#"
+          >
+            Mở app dịch và bắt đầu phát →
+          </a>
+        </div>
+
+        <p class="mt-5 text-[12px] leading-relaxed text-dim">
+          Nút trên mở app dịch kèm khoá phát. Chỉ tab đó mới gửi được nội dung
+          lên phòng — đừng chia sẻ link này.
+        </p>
+        <button id="btnCloseModal" class="mt-3 text-[13px] font-bold text-dim underline">
+          Đóng
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════ NHẬP MẬT KHẨU ═══════════════ -->
+    <div
+      id="joinModal"
+      class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/40 p-5 backdrop-blur-sm"
+    >
+      <form id="joinForm" class="card w-full max-w-sm p-7">
+        <h2 class="mb-1 text-[20px]">Vào phòng</h2>
+        <p id="joinName" class="mb-5 text-[14px] text-dim"></p>
+
+        <label class="label" for="jPass">Mật khẩu</label>
+        <input id="jPass" class="field mb-2" type="password" autocomplete="off" />
+        <p id="joinError" class="mb-3 hidden text-[13px] font-bold text-pink"></p>
+
+        <div class="mt-3 flex gap-3">
+          <button
+            type="button"
+            id="btnCancelJoin"
+            class="btn btn-ghost h-11 flex-1 text-[14px]"
+          >
+            Huỷ
+          </button>
+          <button class="btn btn-candy h-11 flex-1 text-[14px]">Xem</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ═══════════════ TRANG XEM ═══════════════ -->
+    <div id="viewer" class="hidden h-full flex-col gap-4 p-4 md:p-6">
+      <header class="flex flex-none flex-wrap items-center gap-3">
+        <button id="btnLeave" class="btn btn-ghost h-10 px-4 text-[13px]">
+          ← Danh sách
+        </button>
+        <h2 id="vName" class="text-[17px]"></h2>
+        <span id="vCode" class="chip font-mono"></span>
+        <div class="flex-1"></div>
+        <span class="chip" id="vStatus">
+          <span
+            id="vDot"
+            class="h-3 w-3 flex-none rounded-full border-2 border-ink bg-line"
+          ></span>
+          <span id="vStatusText">Đang kết nối…</span>
+        </span>
+      </header>
+
+      <main
+        class="card flex min-h-0 flex-1 flex-col overflow-hidden"
+        aria-label="Lịch sử hội thoại"
+      >
+        <h3
+          class="flex flex-none items-center gap-3 border-b-2 border-ink bg-accent px-4 py-3 text-[13px] uppercase tracking-[.1em] text-white"
+        >
+          Hội thoại
+          <span
+            id="vCount"
+            class="ml-auto grid h-7 min-w-[28px] place-items-center rounded-full border-2 border-ink bg-white px-1.5 text-[12px] text-ink"
+            >0</span
+          >
+        </h3>
+        <div
+          id="vLog"
+          class="scroller flex flex-1 flex-col gap-3 overflow-y-auto scroll-smooth p-4"
+        ></div>
+      </main>
+
+      <section
+        class="card relative flex flex-none flex-col justify-end gap-4 overflow-hidden px-5 py-6 text-left shadow-sticker-pink md:px-8 md:py-7"
+      >
+        <span
+          class="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-amber/30"
+          aria-hidden="true"
+        ></span>
+        <div id="vOrig" class="relative break-words font-display font-semibold text-dim"></div>
+        <div
+          id="vTrans"
+          class="relative break-words font-display font-extrabold tracking-tight"
+          aria-live="polite"
+        ></div>
+      </section>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) =>
+        String(s).replace(
+          /[&<>"]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+        );
+
+      const LANGS = [
+        ["en", "English"], ["vi", "Vietnamese"], ["zh", "Chinese"],
+        ["ja", "Japanese"], ["ko", "Korean"], ["fr", "French"],
+        ["de", "German"], ["es", "Spanish"], ["pt", "Portuguese"],
+        ["ru", "Russian"], ["th", "Thai"], ["id", "Indonesian"],
+        ["ms", "Malay"], ["hi", "Hindi"], ["ar", "Arabic"], ["it", "Italian"],
+        ["nl", "Dutch"], ["tr", "Turkish"], ["pl", "Polish"], ["uk", "Ukrainian"],
+      ];
+      const langName = (c) => (LANGS.find((l) => l[0] === c) || [c, c])[1];
+
+      for (const [sel, def] of [["cLangA", "en"], ["cLangB", "vi"]]) {
+        $(sel).innerHTML = LANGS.map(
+          ([c, n]) => `<option value="${c}">${n}</option>`,
+        ).join("");
+        $(sel).value = def;
+      }
+
+      /* ─────────────── lobby ─────────────── */
+
+      let pendingJoin = null; // room being unlocked
+
+      async function loadRooms() {
+        let data;
+        try {
+          data = await (await fetch("/api/rooms")).json();
+        } catch {
+          $("roomList").innerHTML = shell("Không kết nối được server.");
+          return;
+        }
+        const list = data.rooms || [];
+        $("roomCount").textContent = list.length;
+
+        if (!list.length) {
+          $("roomList").innerHTML = shell("Chưa có phòng nào đang mở.");
+          return;
+        }
+
+        $("roomList").innerHTML = list
+          .map(
+            (r) => `
+          <button data-code="${esc(r.code)}" data-name="${esc(r.name)}"
+                  class="room card flex w-full items-center gap-4 p-4 text-left transition-transform
+                         duration-300 ease-bounce hover:-translate-y-0.5">
+            <span class="font-mono text-[20px] font-bold tracking-[.1em] text-accent">${esc(r.code)}</span>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate font-display text-[15px] font-bold">${esc(r.name)}</span>
+              <span class="block text-[12px] text-dim">
+                ${esc(langName(r.langA))} ⇄ ${esc(langName(r.langB))} · ${r.viewers} người xem · ${r.lines} câu
+              </span>
+            </span>
+            ${
+              r.live
+                ? `<span class="chip !border-mint bg-mint/20"><span class="h-2.5 w-2.5 animate-blip rounded-full border-2 border-ink bg-mint"></span>LIVE</span>`
+                : `<span class="chip text-dim">Chờ</span>`
+            }
+            ${r.hasPassword ? lockIcon() : ""}
+          </button>`,
+          )
+          .join("");
+      }
+
+      const shell = (msg) =>
+        `<div class="card p-8 text-center text-[14px] text-dim">${esc(msg)}</div>`;
+
+      const lockIcon = () => `
+        <svg viewBox="0 0 24 24" class="h-5 w-5 flex-none text-dim" fill="none"
+             stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+          <rect x="4" y="10" width="16" height="11" rx="2"/>
+          <path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+        </svg>`;
+
+      $("roomList").onclick = (e) => {
+        const btn = e.target.closest(".room");
+        if (!btn) return;
+        openJoin(btn.dataset.code, btn.dataset.name);
+      };
+      $("btnRefresh").onclick = loadRooms;
+
+      /* ─────────────── tạo phòng ─────────────── */
+
+      $("createForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = e.target.querySelector("button");
+        btn.disabled = true;
+        try {
+          const res = await fetch("/api/rooms", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: $("cName").value,
+              password: $("cPass").value,
+              langA: $("cLangA").value,
+              langB: $("cLangB").value,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Không tạo được phòng.");
+          showCreated(data);
+          e.target.reset();
+          $("cLangA").value = "en";
+          $("cLangB").value = "vi";
+          loadRooms();
+        } catch (err) {
+          alert(err.message);
+        } finally {
+          btn.disabled = false;
+        }
+      };
+
+      function showCreated({ code, hostToken, langA, langB }) {
+        $("createdCode").textContent = code;
+        // The host key travels in the fragment: fragments are never sent to
+        // the server and stay out of access logs and Referer headers.
+        $("btnHost").href =
+          `/#room=${code}&host=${hostToken}&a=${langA}&b=${langB}`;
+        $("btnCopyCode").onclick = () => copy(code, $("btnCopyCode"), "Đã chép mã");
+        $("btnCopyLink").onclick = () =>
+          copy(
+            `${location.origin}/rooms.html?join=${code}`,
+            $("btnCopyLink"),
+            "Đã chép link",
+          );
+        show($("createdModal"));
+      }
+
+      async function copy(text, btn, done) {
+        const original = btn.textContent;
+        try {
+          await navigator.clipboard.writeText(text);
+          btn.textContent = done;
+        } catch {
+          btn.textContent = text; // clipboard blocked — show it to select by hand
+        }
+        setTimeout(() => (btn.textContent = original), 1800);
+      }
+
+      $("btnCloseModal").onclick = () => hide($("createdModal"));
+
+      /* ─────────────── vào phòng ─────────────── */
+
+      function openJoin(code, name) {
+        pendingJoin = { code, name };
+        $("joinName").textContent = `${name} · mã ${code}`;
+        $("joinError").classList.add("hidden");
+        $("jPass").value = "";
+        show($("joinModal"));
+        $("jPass").focus();
+      }
+
+      $("btnCancelJoin").onclick = () => hide($("joinModal"));
+
+      $("joinForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const { code } = pendingJoin;
+        const res = await fetch(`/api/rooms/${code}/join`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: $("jPass").value }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          $("joinError").textContent = data.error || "Không vào được phòng.";
+          $("joinError").classList.remove("hidden");
+          return;
+        }
+        hide($("joinModal"));
+        openViewer(code, data);
+      };
+
+      const show = (el) => {
+        el.classList.remove("hidden");
+        el.classList.add("flex");
+      };
+      const hide = (el) => {
+        el.classList.add("hidden");
+        el.classList.remove("flex");
+      };
+
+      /* ─────────────── xem trực tiếp ─────────────── */
+
+      let source = null;
+      let lineCount = 0;
+
+      function openViewer(code, { viewerToken, name, langA, langB }) {
+        $("lobby").classList.add("hidden");
+        $("viewer").classList.remove("hidden");
+        $("viewer").classList.add("flex");
+        $("vName").textContent = name;
+        $("vCode").textContent = code;
+        $("vLog").innerHTML = "";
+        lineCount = 0;
+        $("vCount").textContent = "0";
+        document.title = `${name} — Live Translate`;
+
+        source = new EventSource(
+          `/api/rooms/${code}/stream?token=${encodeURIComponent(viewerToken)}`,
+        );
+
+        source.addEventListener("snapshot", (e) => {
+          const d = JSON.parse(e.data);
+          for (const line of d.lines) addLine(line);
+          paintLive(d.live);
+          setStatus("Đang xem trực tiếp", "bg-mint animate-blip");
+        });
+        source.addEventListener("live", (e) => paintLive(JSON.parse(e.data)));
+        source.addEventListener("line", (e) => {
+          addLine(JSON.parse(e.data));
+          paintLive({ orig: "", trans: "" });
+        });
+        source.addEventListener("closed", () => {
+          setStatus("Chủ phòng đã đóng", "bg-pink");
+          source.close();
+        });
+        // EventSource retries on its own; just reflect the state.
+        source.onerror = () => setStatus("Mất kết nối, đang thử lại…", "bg-amber animate-blip");
+        source.onopen = () => setStatus("Đang xem trực tiếp", "bg-mint animate-blip");
+      }
+
+      function setStatus(text, dotClass) {
+        $("vStatusText").textContent = text;
+        $("vDot").className =
+          "h-3 w-3 flex-none rounded-full border-2 border-ink " + dotClass;
+      }
+
+      function paintLive({ orig, trans }) {
+        const o = $("vOrig"),
+          t = $("vTrans");
+        o.textContent = orig || "";
+        t.textContent = trans || "";
+        o.scrollTop = o.scrollHeight;
+        t.scrollTop = t.scrollHeight;
+      }
+
+      function addLine({ orig, trans, src }) {
+        const log = $("vLog");
+        const tone = src === "a" ? "accent" : "pink";
+        const el = document.createElement("div");
+        el.className = `bub rounded-bl-none bg-white shadow-[3px_3px_0px_0px_var(--tone)]`;
+        el.style.setProperty("--tone", src === "a" ? "#8B5CF6" : "#F472B6");
+        el.innerHTML =
+          `<span class="tag ${src === "a" ? "bg-accent text-white" : "bg-pink text-ink"}">Gốc</span>` +
+          `<span class="block"></span>` +
+          `<span class="tag mt-3 bg-muted text-dim">Bản dịch</span>` +
+          `<span class="block font-display font-bold"></span>`;
+        const [origEl, transEl] = el.querySelectorAll("span.block");
+        origEl.textContent = orig;
+        transEl.textContent = trans;
+        log.appendChild(el);
+        log.scrollTop = log.scrollHeight;
+        $("vCount").textContent = ++lineCount;
+      }
+
+      $("btnLeave").onclick = () => {
+        source?.close();
+        source = null;
+        $("viewer").classList.add("hidden");
+        $("viewer").classList.remove("flex");
+        $("lobby").classList.remove("hidden");
+        document.title = "Rooms — Live Translate";
+        loadRooms();
+      };
+
+      /* ─────────────── khởi động ─────────────── */
+
+      loadRooms();
+      setInterval(() => {
+        if (!source) loadRooms(); // only poll the lobby while not watching
+      }, 8000);
+
+      // ?join=CODE opens the password prompt straight away.
+      const wanted = new URLSearchParams(location.search).get("join");
+      if (wanted) {
+        fetch("/api/rooms")
+          .then((r) => r.json())
+          .then(({ rooms }) => {
+            const hit = (rooms || []).find(
+              (r) => r.code === wanted.toUpperCase(),
+            );
+            if (hit) openJoin(hit.code, hit.name);
+          })
+          .catch(() => {});
+      }
+    </script>
+  </body>
+</html>

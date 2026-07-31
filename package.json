@@ -1,0 +1,18 @@
+{
+  "name": "live-translate",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Two-way speech translation UI + token server for Soniox",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --env-file-if-exists=.env --watch server.js"
+  },
+  "engines": {
+    "node": ">=20.6"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.14"
+  }
+}
